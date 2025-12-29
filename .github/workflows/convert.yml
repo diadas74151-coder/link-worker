@@ -24,6 +24,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm install
+          npm install playwright # <--- ADDED: Explicitly installs the library
           npx playwright install chromium --with-deps
 
       - name: Convert link
