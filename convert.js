@@ -7,11 +7,10 @@ if (!PRODUCT_LINK) {
   process.exit(1);
 }
 
-// 👇 PROXY SETTING (From your list)
-// If this fails later, just change the IP:PORT here to another one from your list.
-const PROXY_SERVER = "http://27.34.242.98:80"; 
+// 👇 SELECTED PROXY FROM YOUR LIST (Fastest: 76ms)
+const PROXY_SERVER = "http://108.165.152.35:80"; 
 
-// 👇 STRICT USER AGENT (Must match what you used to save the session)
+// 👇 STRICT USER AGENT
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 (async () => {
@@ -19,7 +18,7 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 
   const browser = await chromium.launch({
     headless: true,
-    proxy: { server: PROXY_SERVER } // 👈 Forces traffic through India
+    proxy: { server: PROXY_SERVER }
   });
 
   // 1. Load Session
@@ -32,14 +31,12 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
       process.exit(1);
   }
 
-  // 2. Create Context (Pretending to be your PC + Indian IP)
   const context = await browser.newContext({
     storageState: storageState,
     userAgent: USER_AGENT,
     viewport: { width: 1280, height: 720 },
     permissions: ["clipboard-read", "clipboard-write"],
-    // Increase timeout for navigation because proxies are slow
-    navigationTimeout: 90000, 
+    navigationTimeout: 120000, 
   });
 
   const page = await context.newPage();
@@ -47,62 +44,47 @@ const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
   try {
     console.log("Navigating to Wishlink...");
     
-    // 3. Go to Create Page
-    // We increase timeout to 90s because free proxies can be slow
+    // 2. Go to Create Page
     await page.goto("https://creator.wishlink.com/new-product", {
-      waitUntil: "domcontentloaded", // Faster than networkidle
-      timeout: 90000
+      waitUntil: "domcontentloaded", 
+      timeout: 120000
     });
 
-    // 🔴 CHECK: Did the session survive?
+    // 🔴 CHECK SESSION
     const url = page.url();
     if (url.includes("/welcome") || url.includes("/login")) {
-      throw new Error("❌ SESSION EXPIRED: The proxy didn't fool them, or the session is dead.");
+      throw new Error("❌ SESSION EXPIRED: The proxy IP didn't work. Try the next one in the list.");
     }
     
     console.log("✅ IP Check Passed! Session is Alive.");
 
-    // 4. Wait for Input
+    // 3. Input Link
     const input = page.getByPlaceholder(/paste your product link/i);
     await input.waitFor({ state: "visible", timeout: 60000 });
-
-    // 5. Fill Link
-    console.log("Filling product link...");
     await input.fill(PRODUCT_LINK);
 
-    // 6. Click Create Button
+    // 4. Create
     console.log("Clicking Create...");
     await page.getByRole("button", { name: /create wishlink/i }).click();
 
-    // 7. Wait for Success Modal
+    // 5. Wait for Share
     console.log("Waiting for success...");
     const shareButton = page.getByRole("button", { name: /share wishlink/i });
-    await shareButton.waitFor({ timeout: 90000 });
-
-    // 8. Click Share (Triggers Auto-Copy)
-    console.log("Clicking Share to trigger copy...");
+    await shareButton.waitFor({ timeout: 120000 });
     await shareButton.click();
 
-    // 9. Read Clipboard
+    // 6. Copy
     await page.waitForTimeout(2000); 
     const wishlink = await page.evaluate(() => navigator.clipboard.readText());
 
     if (!wishlink || !wishlink.startsWith("http")) {
-      throw new Error(`❌ Clipboard was empty. Got: "${wishlink}"`);
+      throw new Error(`❌ Clipboard empty. Got: "${wishlink}"`);
     }
 
-    // 10. Save Output
+    // 7. Save
     fs.writeFileSync(
       "wishlink.json",
-      JSON.stringify(
-        {
-          input: PRODUCT_LINK,
-          wishlink: wishlink,
-          createdAt: new Date().toISOString(),
-        },
-        null,
-        2
-      )
+      JSON.stringify({ input: PRODUCT_LINK, wishlink: wishlink }, null, 2)
     );
 
     console.log("✅ Wishlink created successfully:", wishlink);
