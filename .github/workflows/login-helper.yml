@@ -1,0 +1,22 @@
+name: 🔐 Login Helper (One-Time)
+
+on: workflow_dispatch
+
+jobs:
+  interactive-login:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install Dependencies
+        run: npm install
+
+      # This creates a live connection to the server
+      - name: Start Interactive Session
+        uses: mxschmitt/action-tmate@v3
