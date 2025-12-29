@@ -1,28 +1,32 @@
-name: Link Worker
+name: Wishlink Converter
 
 on:
   workflow_dispatch:
     inputs:
       product_link:
-        description: "Product link to process"
+        description: "Paste product link to convert"
         required: true
 
 jobs:
-  run:
+  convert:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
-      - name: Run converter
+      - name: Install dependencies
+        run: |
+          npm install
+          npx playwright install --with-deps
+
+      - name: Convert link
+        env:
+          WISHLINK_STORAGE: ${{ secrets.WISHLINK_STORAGE }}
         run: |
           node convert.js "${{ github.event.inputs.product_link }}"
-          echo "converted_link=$(cat output.txt)" >> $GITHUB_OUTPUT
-
-      - name: Set output
-        id: result
-        run: echo "done"
