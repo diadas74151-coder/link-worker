@@ -1,6 +1,9 @@
 {
   "name": "link-worker",
   "private": true,
+  "scripts": {
+    "postinstall": "playwright install chromium"
+  },
   "dependencies": {
     "playwright": "^1.51.0"
   }
