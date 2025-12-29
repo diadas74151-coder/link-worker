@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       product_link:
-        description: "Product link to process"
+        description: "Product link to convert"
         required: true
 
 jobs:
@@ -20,18 +20,6 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install dependencies
-        run: |
-          npm init -y
-          npm install playwright
-          npx playwright install chromium
-
-      - name: Run worker
+      - name: Run converter
         run: |
           node convert.js "${{ github.event.inputs.product_link }}"
-
-      - name: Upload result
-        uses: actions/upload-artifact@v4
-        with:
-          name: conversion-result
-          path: result.json
