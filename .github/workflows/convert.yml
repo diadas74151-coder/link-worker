@@ -29,3 +29,10 @@ jobs:
       - name: Run worker
         run: |
           node convert.js "${{ github.event.inputs.product_link }}"
+
+                - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: conversion-result
+          path: result.json
+
