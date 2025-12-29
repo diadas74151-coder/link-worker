@@ -14,26 +14,26 @@ if (!PRODUCT_LINK) {
 
   const context = await browser.newContext({
     storageState: JSON.parse(process.env.WISHLINK_STORAGE),
-    permissions: ["clipboard-read", "clipboard-write"], // Required for auto-copy
+    permissions: ["clipboard-read", "clipboard-write"],
   });
 
   const page = await context.newPage();
 
   try {
     console.log("Navigating to Wishlink...");
-    // 1️⃣ Go to Create Page and wait for network to be idle (handles redirects)
+    // 1️⃣ Go to Create Page
     await page.goto("https://creator.wishlink.com/new-product", {
       waitUntil: "networkidle",
       timeout: 60000
     });
 
-    // 🔴 CHECK: Are we on the login page?
+    // 🔴 CHECK: Did we get redirected to Login?
     if (page.url().includes("/login") || page.url().includes("signin")) {
-      throw new Error("❌ SESSION EXPIRED: The bot was redirected to the Login page. Please generate a new WISHLINK_STORAGE json.");
+      throw new Error("❌ SESSION EXPIRED: The bot was redirected to the Login page. Please update WISHLINK_STORAGE.");
     }
 
-    // 2️⃣ Wait for Input
-    // Matches "PASTE YOUR PRODUCT LINK HERE" (Case Insensitive)
+    // 2️⃣ Wait for Input (FIXED: Uses Regex to match Uppercase/Lowercase)
+    // Matches "PASTE YOUR PRODUCT LINK HERE" from your screenshot
     const input = page.getByPlaceholder(/paste your product link/i);
     await input.waitFor({ state: "visible", timeout: 30000 });
 
@@ -55,12 +55,10 @@ if (!PRODUCT_LINK) {
     await page.getByRole("button", { name: /share wishlink/i }).click();
 
     // 7️⃣ Read Clipboard
-    // Give the browser a second to update the clipboard
     await page.waitForTimeout(2000);
     const wishlink = await page.evaluate(() => navigator.clipboard.readText());
 
     if (!wishlink || !wishlink.startsWith("http")) {
-      // Fallback: Sometimes the link is shown on screen, we can try to grab it if clipboard fails
       throw new Error(`❌ Clipboard was empty. Got: "${wishlink}"`);
     }
 
@@ -82,7 +80,6 @@ if (!PRODUCT_LINK) {
 
   } catch (error) {
     console.error("❌ Error during conversion:", error.message);
-    console.error("Current Page URL:", page.url());
     process.exit(1);
   } finally {
     await browser.close();
