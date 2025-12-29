@@ -12,6 +12,7 @@ if (!PRODUCT_LINK) {
     headless: true,
   });
 
+  // Load the session (Cookies + Local Storage)
   const context = await browser.newContext({
     storageState: JSON.parse(process.env.WISHLINK_STORAGE),
     permissions: ["clipboard-read", "clipboard-write"],
@@ -21,7 +22,9 @@ if (!PRODUCT_LINK) {
 
   try {
     console.log("Navigating to Wishlink...");
+    
     // 1️⃣ Go to Create Page
+    // We wait for 'networkidle' to ensure any redirects (like login) happen before we check
     await page.goto("https://creator.wishlink.com/new-product", {
       waitUntil: "networkidle",
       timeout: 60000
@@ -29,11 +32,11 @@ if (!PRODUCT_LINK) {
 
     // 🔴 CHECK: Did we get redirected to Login?
     if (page.url().includes("/login") || page.url().includes("signin")) {
-      throw new Error("❌ SESSION EXPIRED: The bot was redirected to the Login page. Please update WISHLINK_STORAGE.");
+      throw new Error("❌ SESSION EXPIRED: The bot was redirected to the Login page. Please update WISHLINK_STORAGE with a new JSON.");
     }
 
-    // 2️⃣ Wait for Input (FIXED: Uses Regex to match Uppercase/Lowercase)
-    // Matches "PASTE YOUR PRODUCT LINK HERE" from your screenshot
+    // 2️⃣ Wait for Input (FIXED: Case Insensitive Regex)
+    // Matches "PASTE YOUR PRODUCT LINK HERE" regardless of uppercase/lowercase
     const input = page.getByPlaceholder(/paste your product link/i);
     await input.waitFor({ state: "visible", timeout: 30000 });
 
@@ -45,21 +48,22 @@ if (!PRODUCT_LINK) {
     console.log("Clicking Create...");
     await page.getByRole("button", { name: /create wishlink/i }).click();
 
-    // 5️⃣ Wait for Success & Share
-    console.log("Waiting for completion...");
-    // Wait for the 'Congratulations' text or the 'Share Wishlink' button
-    await page.getByRole("button", { name: /share wishlink/i }).waitFor({ timeout: 60000 });
+    // 5️⃣ Wait for Success Modal
+    console.log("Waiting for success...");
+    // We wait for the 'Share Wishlink' button to appear, which confirms the product was created
+    const shareButton = page.getByRole("button", { name: /share wishlink/i });
+    await shareButton.waitFor({ timeout: 60000 });
 
     // 6️⃣ Click Share (Triggers Auto-Copy)
     console.log("Clicking Share to trigger copy...");
-    await page.getByRole("button", { name: /share wishlink/i }).click();
+    await shareButton.click();
 
     // 7️⃣ Read Clipboard
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(2000); // Wait for system clipboard to update
     const wishlink = await page.evaluate(() => navigator.clipboard.readText());
 
     if (!wishlink || !wishlink.startsWith("http")) {
-      throw new Error(`❌ Clipboard was empty. Got: "${wishlink}"`);
+      throw new Error(`❌ Clipboard was empty or invalid. Got: "${wishlink}"`);
     }
 
     // 8️⃣ Save Output
