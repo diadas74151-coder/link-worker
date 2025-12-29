@@ -11,41 +11,26 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
   const page = await context.newPage();
 
   try {
-    // ---------------------------------------------------------
     // 1. NAVIGATE
-    // ---------------------------------------------------------
     console.log("🌍 Navigating to Wishlink...");
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
-    // ---------------------------------------------------------
-    // 2. OPEN DROPDOWN (Relative Strategy)
-    // ---------------------------------------------------------
-    console.log("🔍 Locating Phone Input...");
-    const phoneInput = page.locator('input[type="tel"]').first();
-    await phoneInput.waitFor({ state: 'visible', timeout: 60000 });
+    // 2. FORCE CLICK DROPDOWN
+    console.log("🔍 Locating Country Dropdown...");
+    
+    // We use the specific class found in your error logs: .PhoneInputCountry
+    const countryDropdown = page.locator('.PhoneInputCountry').first();
+    await countryDropdown.waitFor({ state: 'visible', timeout: 30000 });
 
-    console.log("👉 Opening Dropdown (clicking to the left of input)...");
-    
-    // STRATEGY: Get the parent container of the input, then find the dropdown inside it
-    // The dropdown is usually the first DIV sibling of the input
-    const inputContainer = phoneInput.locator('..');
-    const flagDropdown = inputContainer.locator('div').first();
-    
-    // Force click it using JS if standard click fails (bypasses visibility checks)
-    try {
-        await flagDropdown.click({ timeout: 5000 });
-    } catch (e) {
-        console.log("⚠️ Standard click failed, forcing JS click...");
-        await flagDropdown.evaluate(node => node.click());
-    }
+    console.log("👉 Force-Clicking Dropdown...");
+    // FORCE: TRUE is the fix for "subtree intercepts pointer events"
+    await countryDropdown.click({ force: true });
     
     console.log("📂 Dropdown Clicked.");
 
-    // ---------------------------------------------------------
-    // 3. SELECT INDIA (Keyboard Trick: I -> I)
-    // ---------------------------------------------------------
+    // 3. SELECT INDIA (Keyboard Trick)
     console.log("⌨️  Typing 'I' twice...");
-    await page.waitForTimeout(1000); // Wait for list to appear
+    await page.waitForTimeout(1000); // Wait for list to open
     
     // Press I, wait, Press I
     await page.keyboard.press('I');
@@ -53,32 +38,25 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await page.keyboard.press('I');
     await page.waitForTimeout(800);
 
-    // Press ENTER to select whatever is highlighted (India)
+    // Press ENTER to select India
     console.log("✅ Pressing ENTER to confirm...");
     await page.keyboard.press('Enter');
-    
     await page.waitForTimeout(1000);
 
-    // ---------------------------------------------------------
     // 4. ENTER PHONE NUMBER
-    // ---------------------------------------------------------
-    // Refocus input just in case
+    console.log("📱 Locating Phone Input...");
+    const phoneInput = page.locator('input[type="tel"]').first();
     await phoneInput.click();
     
     const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
     await phoneInput.fill(phone);
 
-    // ---------------------------------------------------------
     // 5. GET OTP
-    // ---------------------------------------------------------
     console.log("👆 Clicking 'Get OTP'...");
-    // Try generic button selector
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
     await otpBtn.click();
 
-    // ---------------------------------------------------------
     // 6. ENTER OTP
-    // ---------------------------------------------------------
     console.log("\n📩 OTP Sent! Check your phone.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
     
@@ -86,9 +64,7 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await otpInput.waitFor({ state: 'visible' });
     await otpInput.fill(otp);
 
-    // ---------------------------------------------------------
     // 7. FINISH
-    // ---------------------------------------------------------
     console.log("⏳ Verifying...");
     try {
         await page.waitForTimeout(1000);
