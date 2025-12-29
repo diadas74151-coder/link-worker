@@ -1,4 +1,4 @@
-name: 🔐 Login Helper (One-Time)
+name: 🔐 Login Helper (Cloudflare)
 
 on: workflow_dispatch
 
@@ -15,8 +15,36 @@ jobs:
           node-version: 18
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          npx playwright install chromium
 
-      # This creates a live connection to the server
-      - name: Start Interactive Session
-        uses: mxschmitt/action-tmate@v3
+      - name: Start Web Terminal (Cloudflare)
+        run: |
+          # 1. Download ttyd (Web Terminal)
+          wget -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
+          chmod +x ttyd
+          
+          # 2. Start ttyd in background on port 8080
+          ./ttyd -p 8080 bash &
+          
+          # 3. Install Cloudflared (Tunnel)
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+
+          # 4. Start Tunnel
+          cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
+          
+          # 5. Wait for Link
+          echo "Waiting for Cloudflare connection..."
+          sleep 10
+          
+          echo "✅ CONNECTION READY!"
+          echo "--------------------------------------------------"
+          echo "👇👇👇 CLICK THIS LINK TO OPEN TERMINAL 👇👇👇"
+          grep -o 'https://.*\.trycloudflare.com' tunnel.log
+          echo "👆👆👆 CLICK THIS LINK TO OPEN TERMINAL 👆👆👆"
+          echo "--------------------------------------------------"
+
+          # 6. Keep Alive
+          sleep 3600
