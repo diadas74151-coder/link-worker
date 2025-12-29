@@ -1,6 +1,7 @@
 name: Login Helper
 
-on: [workflow_dispatch]
+on:
+  workflow_dispatch:
 
 jobs:
   interactive-login:
@@ -17,20 +18,24 @@ jobs:
       - name: Install Dependencies
         run: |
           npm install --ignore-scripts
-          chmod +x ./node_modules/.bin/playwright
-          ./node_modules/.bin/playwright install chromium
+          npx playwright install chromium
 
       - name: Start Web Terminal (Cloudflare)
         run: |
+          # Install ttyd (Terminal)
           wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
           chmod +x ttyd
+          # Start ttyd in background (Writable mode)
           ./ttyd -W -p 8080 bash &
           
+          # Install Cloudflared (Tunnel)
           wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
           sudo dpkg -i cloudflared-linux-amd64.deb
+          
+          # Start Tunnel
           cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
           
-          echo "Waiting for connection..."
+          echo "Waiting for Cloudflare connection..."
           sleep 10
           
           echo "--------------------------------------------------"
@@ -39,4 +44,5 @@ jobs:
           echo "👆 CLICK THIS LINK TO OPEN TERMINAL 👆"
           echo "--------------------------------------------------"
           
+          # Keep alive for 1 hour
           sleep 3600
