@@ -2,7 +2,7 @@
   "name": "link-worker",
   "private": true,
   "scripts": {
-    "postinstall": "playwright install chromium"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
     "playwright": "^1.51.0"
