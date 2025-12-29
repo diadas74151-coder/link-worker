@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       product_link:
-        description: "Paste product link"
+        description: "Product link to convert"
         required: true
 
 jobs:
@@ -12,8 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -21,7 +20,9 @@ jobs:
           node-version: 18
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          npx playwright install chromium --with-deps
 
       - name: Convert link
         env:
@@ -32,5 +33,5 @@ jobs:
       - name: Upload result
         uses: actions/upload-artifact@v4
         with:
-          name: wishlink
+          name: wishlink-result
           path: wishlink.json
