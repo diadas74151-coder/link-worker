@@ -15,7 +15,7 @@ jobs:
           node-version: 18
 
       - name: Install Dependencies
-        # 👇 FIXED: We manually grant permission (+x) to the binary before running it
+        # Fixes the 127 Permission Error + Installs Playwright
         run: |
           npm install --ignore-scripts
           chmod +x ./node_modules/.bin/playwright
@@ -27,8 +27,9 @@ jobs:
           wget -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
           chmod +x ttyd
           
-          # 2. Start ttyd in background on port 8080
-          ./ttyd -p 8080 bash &
+          # 2. Start ttyd in BACKGROUND with WRITABLE flag (-W)
+          # The -W is critical so you can type!
+          ./ttyd -W -p 8080 bash &
           
           # 3. Install Cloudflared (Tunnel)
           wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
