@@ -11,73 +11,73 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
   const page = await context.newPage();
 
   try {
+    // ---------------------------------------------------------
+    // 1. NAVIGATE
+    // ---------------------------------------------------------
     console.log("🌍 Navigating to Wishlink...");
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
     // ---------------------------------------------------------
-    // STEP 1: OPEN DROPDOWN (Click the "+1" Text)
+    // 2. OPEN DROPDOWN (Relative Strategy)
     // ---------------------------------------------------------
-    console.log("🔍 Looking for default Country Code (+1)...");
-    
-    // Instead of a CSS class, we look for the VISIBLE TEXT "+1"
-    // This is much more reliable.
-    const countryCode = page.getByText('+1', { exact: true }).first();
-    
-    // If +1 is not found, maybe it's just a flag icon, so we try the generic container
-    const countryContainer = page.locator('.react-tel-input > div').first();
+    console.log("🔍 Locating Phone Input...");
+    const phoneInput = page.locator('input[type="tel"]').first();
+    await phoneInput.waitFor({ state: 'visible', timeout: 60000 });
 
-    if (await countryCode.isVisible()) {
-        console.log("👉 Found '+1'. Clicking it...");
-        await countryCode.click();
-    } else {
-        console.log("⚠️ '+1' text not found. Clicking the input container instead...");
-        await countryContainer.click();
-    }
-
-    // ---------------------------------------------------------
-    // STEP 2: SELECT INDIA (Click "India" Text)
-    // ---------------------------------------------------------
-    console.log("🇮🇳 Searching for 'India' in the list...");
+    console.log("👉 Opening Dropdown (clicking to the left of input)...");
     
-    // Wait for the word "India" to appear anywhere and click it
-    // We use a regex to match "India" case-insensitively
-    const indiaOption = page.getByRole('listitem').filter({ hasText: /^India/i }).first();
+    // STRATEGY: Get the parent container of the input, then find the dropdown inside it
+    // The dropdown is usually the first DIV sibling of the input
+    const inputContainer = phoneInput.locator('..');
+    const flagDropdown = inputContainer.locator('div').first();
     
-    // Fallback: If listitem role isn't used, look for any text element
-    const indiaText = page.locator('span, div, li').filter({ hasText: /^India$/i }).first();
-
-    if (await indiaOption.isVisible()) {
-        await indiaOption.click();
-    } else {
-        // Scroll to find it if needed (simulate typing 'I' 'n')
-        await page.keyboard.type('In'); 
-        await page.waitForTimeout(500);
-        await indiaText.click();
+    // Force click it using JS if standard click fails (bypasses visibility checks)
+    try {
+        await flagDropdown.click({ timeout: 5000 });
+    } catch (e) {
+        console.log("⚠️ Standard click failed, forcing JS click...");
+        await flagDropdown.evaluate(node => node.click());
     }
     
-    console.log("✅ Clicked India. Verifying...");
+    console.log("📂 Dropdown Clicked.");
+
+    // ---------------------------------------------------------
+    // 3. SELECT INDIA (Keyboard Trick: I -> I)
+    // ---------------------------------------------------------
+    console.log("⌨️  Typing 'I' twice...");
+    await page.waitForTimeout(1000); // Wait for list to appear
     
-    // Small pause to let the selection update
+    // Press I, wait, Press I
+    await page.keyboard.press('I');
+    await page.waitForTimeout(800); 
+    await page.keyboard.press('I');
+    await page.waitForTimeout(800);
+
+    // Press ENTER to select whatever is highlighted (India)
+    console.log("✅ Pressing ENTER to confirm...");
+    await page.keyboard.press('Enter');
+    
     await page.waitForTimeout(1000);
 
     // ---------------------------------------------------------
-    // STEP 3: ENTER PHONE NUMBER
+    // 4. ENTER PHONE NUMBER
     // ---------------------------------------------------------
-    const phoneInput = page.getByPlaceholder(/enter phone number/i);
+    // Refocus input just in case
     await phoneInput.click();
     
     const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
     await phoneInput.fill(phone);
 
     // ---------------------------------------------------------
-    // STEP 4: GET OTP
+    // 5. GET OTP
     // ---------------------------------------------------------
     console.log("👆 Clicking 'Get OTP'...");
+    // Try generic button selector
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
     await otpBtn.click();
 
     // ---------------------------------------------------------
-    // STEP 5: ENTER OTP
+    // 6. ENTER OTP
     // ---------------------------------------------------------
     console.log("\n📩 OTP Sent! Check your phone.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
@@ -87,10 +87,9 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await otpInput.fill(otp);
 
     // ---------------------------------------------------------
-    // STEP 6: FINISH
+    // 7. FINISH
     // ---------------------------------------------------------
     console.log("⏳ Verifying...");
-    // Auto-click verify if it appears
     try {
         await page.waitForTimeout(1000);
         const verifyBtn = page.locator('button').filter({ hasText: /verify|submit/i }).first();
