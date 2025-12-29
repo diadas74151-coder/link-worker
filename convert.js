@@ -1,61 +1,61 @@
-const { chromium } = require('playwright');
-const fs = require('fs');
+const { chromium } = require("playwright");
+const fs = require("fs");
+
+const PRODUCT_LINK = process.argv[2];
+if (!PRODUCT_LINK) {
+  console.error("❌ Product link missing");
+  process.exit(1);
+}
 
 (async () => {
-  const productLink = process.argv[2];
-  if (!productLink) {
-    throw new Error('Product link missing');
-  }
-
   const browser = await chromium.launch({
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    channel: "chromium", // 🔴 IMPORTANT FIX
   });
 
   const context = await browser.newContext({
     storageState: JSON.parse(process.env.WISHLINK_STORAGE),
+    permissions: ["clipboard-read", "clipboard-write"],
   });
 
   const page = await context.newPage();
 
-  // 1. Open create product page
-  await page.goto('https://creator.wishlink.com/new-product', {
-    waitUntil: 'networkidle',
-    timeout: 60000,
+  // 1️⃣ Go directly to Create Wishlink page
+  await page.goto("https://creator.wishlink.com/new-product", {
+    waitUntil: "domcontentloaded",
   });
 
-  // 2. Paste product link
-  const input = page.locator('input[type="text"]');
-  await input.waitFor({ timeout: 30000 });
-  await input.fill(productLink);
+  // 2️⃣ Wait for input (SPA safe)
+  const input = page.locator('input[placeholder*="product link"]');
+  await input.waitFor({ timeout: 60000 });
 
-  // 3. Click Create Wishlink
-  const createBtn = page.locator('button:has-text("Create Wishlink")');
-  await createBtn.waitFor({ timeout: 30000 });
-  await createBtn.click();
+  // 3️⃣ Fill product link
+  await input.fill(PRODUCT_LINK);
 
-  // 4. Wait for success modal
-  await page.waitForSelector('button:has-text("Share Wishlink")', {
-    timeout: 60000,
-  });
+  // 4️⃣ Click Create Wishlink
+  await page.getByRole("button", { name: /create wishlink/i }).click();
 
-  // 5. Click Share Wishlink (copies to clipboard)
-  await page.click('button:has-text("Share Wishlink")');
+  // 5️⃣ Wait for success screen
+  await page.getByText(/congratulations/i, { timeout: 60000 });
 
-  // 6. Read clipboard
+  // 6️⃣ Click Share Wishlink
+  await page.getByRole("button", { name: /share wishlink/i }).click();
+
+  // 7️⃣ Clipboard auto-copy
+  await page.waitForTimeout(2000);
   const wishlink = await page.evaluate(() => navigator.clipboard.readText());
 
-  if (!wishlink || !wishlink.startsWith('http')) {
-    throw new Error('Failed to read Wishlink from clipboard');
+  if (!wishlink || !wishlink.startsWith("http")) {
+    throw new Error("❌ Wishlink not copied");
   }
 
-  // 7. Save output
+  // 8️⃣ Save output
   fs.writeFileSync(
-    'wishlink.json',
+    "wishlink.json",
     JSON.stringify(
       {
-        input: productLink,
-        output: wishlink,
+        input: PRODUCT_LINK,
+        wishlink,
         createdAt: new Date().toISOString(),
       },
       null,
@@ -63,7 +63,7 @@ const fs = require('fs');
     )
   );
 
-  console.log('✅ Wishlink created:', wishlink);
+  console.log("✅ Wishlink created:", wishlink);
 
   await browser.close();
 })();
