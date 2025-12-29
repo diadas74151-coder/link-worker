@@ -11,72 +11,54 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
   const page = await context.newPage();
 
   try {
-    // ---------------------------------------------------------
-    // 1. NAVIGATE & WAIT FOR INPUT
-    // ---------------------------------------------------------
+    // 1. Navigate to Welcome Page
     console.log("🌍 Navigating to Wishlink Welcome Page...");
+    // Go directly to the OTP page if possible, otherwise Welcome
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
+    // 2. Wait for ANY Phone Input
     console.log("⏳ Waiting for phone input...");
-    // Wait for the phone input to appear so we know the page is ready
     const phoneInput = page.locator('input[type="tel"], input[placeholder*="Phone"]');
     await phoneInput.waitFor({ state: 'visible', timeout: 60000 });
 
-    // ---------------------------------------------------------
-    // 2. YOUR LOGIC: SELECT INDIA
-    // ---------------------------------------------------------
+    // 3. Ensure India (+91) is selected
     console.log("🇮🇳 Checking Country Code...");
-    // Try to click the flag dropdown (Standard selector)
+    // Try to click the flag dropdown
     const countryDropdown = page.locator('.flag-dropdown, .selected-flag').first();
     
-    // We wait briefly to ensure it's interactive
-    await countryDropdown.waitFor({ state: 'visible', timeout: 5000 }).catch(() => console.log("⚠️ Dropdown might be hidden, trying anyway..."));
-
     if (await countryDropdown.isVisible()) {
         await countryDropdown.click(); // Open dropdown
-        console.log("📂 Dropdown clicked. Waiting for list...");
-        
         // Wait a split second for list to open
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(500);
         
-        // Click "India"
-        // We look for the list item containing "India"
-        const indiaOption = page.locator('li.country, span.country-name').filter({ hasText: 'India' }).first();
-        
+        // Click India
+        const indiaOption = page.locator('li.country').filter({ hasText: 'India' });
         if (await indiaOption.isVisible()) {
             await indiaOption.click();
             console.log("✅ Selected India (+91)");
-        } else {
-            console.log("⚠️ 'India' option not found in list. It might already be selected.");
         }
     }
 
-    // ---------------------------------------------------------
-    // 3. ENTER PHONE NUMBER
-    // ---------------------------------------------------------
+    // 4. Enter Phone Number
     const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
     await phoneInput.fill(phone);
 
-    // ---------------------------------------------------------
-    // 4. CLICK GET OTP
-    // ---------------------------------------------------------
-    console.log("👆 Clicking 'Get OTP'...");
-    const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
-    await otpBtn.click();
+    // 5. Click "Get OTP" or "Continue"
+    console.log("👆 Clicking Continue...");
+    // Try multiple button selectors
+    const btn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
+    await btn.click();
 
-    // ---------------------------------------------------------
-    // 5. ENTER OTP
-    // ---------------------------------------------------------
-    console.log("\n📩 OTP Sent! Please check your phone.");
+    // 6. Enter OTP
+    console.log("\n📩 OTP Sent! Check your phone.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
     
-    const otpInput = page.locator('input[type="number"], input[autocomplete="one-time-code"]').first();
-    await otpInput.waitFor({ state: 'visible' });
+    // Find OTP input (Wait for it to appear)
+    const otpInput = page.locator('input[autocomplete="one-time-code"], input[type="number"]').first();
+    await otpInput.waitFor({ state: 'visible', timeout: 30000 });
     await otpInput.fill(otp);
 
-    // ---------------------------------------------------------
-    // 6. VERIFY & SAVE
-    // ---------------------------------------------------------
+    // 7. Click Verify (if needed)
     console.log("⏳ Verifying...");
     try {
         await page.waitForTimeout(1000);
@@ -86,10 +68,11 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
         }
     } catch (e) {}
 
-    console.log("⏳ Waiting for Dashboard...");
-    await page.waitForURL('**/new-product**', { timeout: 30000 });
+    // 8. Capture Session
+    console.log("⏳ Waiting for Login Success...");
+    await page.waitForTimeout(5000); // Give it time to load dashboard
     
-    console.log("✅ Login Successful! Generating Session...");
+    console.log("✅ Login Successful! Capturing Session...");
     const storageState = await context.storageState();
     
     console.log("\n👇 COPY THIS JSON 👇\n");
@@ -98,7 +81,6 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
 
   } catch (error) {
     console.error("❌ Error:", error.message);
-    await page.screenshot({ path: 'debug_error.png' });
   } finally {
     await browser.close();
     rl.close();
