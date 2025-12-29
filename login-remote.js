@@ -11,68 +11,96 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
   const page = await context.newPage();
 
   try {
-    // 1. Navigate to Welcome Page
-    console.log("🌍 Navigating to Wishlink Welcome Page...");
-    // Go directly to the OTP page if possible, otherwise Welcome
+    console.log("🌍 Navigating to Wishlink...");
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
-    // 2. Wait for ANY Phone Input
-    console.log("⏳ Waiting for phone input...");
-    const phoneInput = page.locator('input[type="tel"], input[placeholder*="Phone"]');
-    await phoneInput.waitFor({ state: 'visible', timeout: 60000 });
-
-    // 3. Ensure India (+91) is selected
-    console.log("🇮🇳 Checking Country Code...");
-    // Try to click the flag dropdown
-    const countryDropdown = page.locator('.flag-dropdown, .selected-flag').first();
+    // ---------------------------------------------------------
+    // STEP 1: OPEN DROPDOWN (Click the "+1" Text)
+    // ---------------------------------------------------------
+    console.log("🔍 Looking for default Country Code (+1)...");
     
-    if (await countryDropdown.isVisible()) {
-        await countryDropdown.click(); // Open dropdown
-        // Wait a split second for list to open
-        await page.waitForTimeout(500);
-        
-        // Click India
-        const indiaOption = page.locator('li.country').filter({ hasText: 'India' });
-        if (await indiaOption.isVisible()) {
-            await indiaOption.click();
-            console.log("✅ Selected India (+91)");
-        }
+    // Instead of a CSS class, we look for the VISIBLE TEXT "+1"
+    // This is much more reliable.
+    const countryCode = page.getByText('+1', { exact: true }).first();
+    
+    // If +1 is not found, maybe it's just a flag icon, so we try the generic container
+    const countryContainer = page.locator('.react-tel-input > div').first();
+
+    if (await countryCode.isVisible()) {
+        console.log("👉 Found '+1'. Clicking it...");
+        await countryCode.click();
+    } else {
+        console.log("⚠️ '+1' text not found. Clicking the input container instead...");
+        await countryContainer.click();
     }
 
-    // 4. Enter Phone Number
+    // ---------------------------------------------------------
+    // STEP 2: SELECT INDIA (Click "India" Text)
+    // ---------------------------------------------------------
+    console.log("🇮🇳 Searching for 'India' in the list...");
+    
+    // Wait for the word "India" to appear anywhere and click it
+    // We use a regex to match "India" case-insensitively
+    const indiaOption = page.getByRole('listitem').filter({ hasText: /^India/i }).first();
+    
+    // Fallback: If listitem role isn't used, look for any text element
+    const indiaText = page.locator('span, div, li').filter({ hasText: /^India$/i }).first();
+
+    if (await indiaOption.isVisible()) {
+        await indiaOption.click();
+    } else {
+        // Scroll to find it if needed (simulate typing 'I' 'n')
+        await page.keyboard.type('In'); 
+        await page.waitForTimeout(500);
+        await indiaText.click();
+    }
+    
+    console.log("✅ Clicked India. Verifying...");
+    
+    // Small pause to let the selection update
+    await page.waitForTimeout(1000);
+
+    // ---------------------------------------------------------
+    // STEP 3: ENTER PHONE NUMBER
+    // ---------------------------------------------------------
+    const phoneInput = page.getByPlaceholder(/enter phone number/i);
+    await phoneInput.click();
+    
     const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
     await phoneInput.fill(phone);
 
-    // 5. Click "Get OTP" or "Continue"
-    console.log("👆 Clicking Continue...");
-    // Try multiple button selectors
-    const btn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
-    await btn.click();
+    // ---------------------------------------------------------
+    // STEP 4: GET OTP
+    // ---------------------------------------------------------
+    console.log("👆 Clicking 'Get OTP'...");
+    const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
+    await otpBtn.click();
 
-    // 6. Enter OTP
+    // ---------------------------------------------------------
+    // STEP 5: ENTER OTP
+    // ---------------------------------------------------------
     console.log("\n📩 OTP Sent! Check your phone.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
     
-    // Find OTP input (Wait for it to appear)
-    const otpInput = page.locator('input[autocomplete="one-time-code"], input[type="number"]').first();
-    await otpInput.waitFor({ state: 'visible', timeout: 30000 });
+    const otpInput = page.locator('input[type="number"], input[autocomplete="one-time-code"]').first();
+    await otpInput.waitFor({ state: 'visible' });
     await otpInput.fill(otp);
 
-    // 7. Click Verify (if needed)
+    // ---------------------------------------------------------
+    // STEP 6: FINISH
+    // ---------------------------------------------------------
     console.log("⏳ Verifying...");
+    // Auto-click verify if it appears
     try {
         await page.waitForTimeout(1000);
         const verifyBtn = page.locator('button').filter({ hasText: /verify|submit/i }).first();
-        if (await verifyBtn.isVisible()) {
-            await verifyBtn.click();
-        }
+        if (await verifyBtn.isVisible()) await verifyBtn.click();
     } catch (e) {}
 
-    // 8. Capture Session
-    console.log("⏳ Waiting for Login Success...");
-    await page.waitForTimeout(5000); // Give it time to load dashboard
+    console.log("⏳ Waiting for Dashboard...");
+    await page.waitForURL('**/new-product**', { timeout: 30000 });
     
-    console.log("✅ Login Successful! Capturing Session...");
+    console.log("✅ Login Successful! Generating Session...");
     const storageState = await context.storageState();
     
     console.log("\n👇 COPY THIS JSON 👇\n");
@@ -81,6 +109,7 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
 
   } catch (error) {
     console.error("❌ Error:", error.message);
+    await page.screenshot({ path: 'debug_error.png' });
   } finally {
     await browser.close();
     rl.close();
