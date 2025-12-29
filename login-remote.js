@@ -17,7 +17,6 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
 
     // 2. OPEN DROPDOWN
     console.log("🔍 Force-Clicking Country Box...");
-    // Use the class specific to the phone library
     const countryBox = page.locator('.PhoneInputCountry').first();
     await countryBox.waitFor({ state: 'visible', timeout: 30000 });
     await countryBox.click({ force: true });
@@ -25,75 +24,45 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     console.log("📂 Dropdown Clicked. Waiting for list...");
     await page.waitForTimeout(1000);
 
-    // 3. SELECT INDIA (Robust Method)
+    // 3. SELECT INDIA
     console.log("🇮🇳 Selecting 'India'...");
-    
-    // Method A: Try to click the specific text "India"
-    // We use a looser match (contains text) to be safe
+    // Try to click "India" text
     const indiaOption = page.locator('div, li, span').filter({ hasText: 'India' }).last();
-    
     if (await indiaOption.isVisible()) {
-        console.log("👉 Click by Text: India");
         await indiaOption.scrollIntoViewIfNeeded();
         await indiaOption.click({ force: true });
     } else {
-        // Method B: Type specific sequence
-        console.log("⚠️ Text hidden, using Keyboard...");
-        // Type "India" fully to avoid "Indonesia" match
+        // Fallback to typing
         await page.keyboard.type('India');
         await page.waitForTimeout(800);
         await page.keyboard.press('Enter');
     }
-    
     await page.waitForTimeout(1000);
 
-    // 4. VERIFY COUNTRY CODE (CRITICAL STEP)
-    console.log("👀 Verifying Country Code...");
+    // 4. ENTER PHONE NUMBER (Hardcoded & Slow Typing)
+    console.log("📱 Entering Phone Number: 9547131252");
     
-    // Check the value inside the input box
     const phoneInput = page.locator('input[type="tel"]').first();
-    const inputValue = await phoneInput.inputValue();
-    
-    console.log(`ℹ️ Current Input Value: "${inputValue}"`);
-    
-    if (inputValue.includes('+91') || inputValue === '') {
-        console.log("✅ Country seems correct (India +91).");
-    } else {
-        console.log(`❌ WARNING: Country Code looks wrong! Found: ${inputValue}`);
-        console.log("🔄 Retrying India selection via Native Select...");
-        
-        // Emergency Fallback: Force the hidden select element
-        await page.evaluate(() => {
-            const select = document.querySelector('select.PhoneInputCountrySelect');
-            if (select) {
-                select.value = 'IN';
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-            }
-        });
-        await page.waitForTimeout(1000);
-    }
-
-    // 5. ENTER PHONE NUMBER
-    console.log("📱 Entering Phone Number...");
     await phoneInput.click({ force: true });
     
-    const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
-    await phoneInput.fill(phone, { force: true });
+    // 👇 CRITICAL FIX: Type slowly so we don't break the +91 format
+    await page.waitForTimeout(500);
+    await phoneInput.pressSequentially('9547131252', { delay: 100 });
 
-    // 6. GET OTP
+    // 5. GET OTP
     console.log("👆 Clicking 'Get OTP'...");
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
     await otpBtn.click({ force: true });
 
-    // 7. ENTER OTP
-    console.log("\n📩 OTP Sent! Check your phone.");
+    // 6. ENTER OTP
+    console.log("\n📩 OTP Sent! Check your phone now.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
     
     const otpInput = page.locator('input[type="number"], input[autocomplete="one-time-code"]').first();
     await otpInput.waitFor({ state: 'visible' });
     await otpInput.fill(otp, { force: true });
 
-    // 8. FINISH
+    // 7. FINISH
     console.log("⏳ Verifying...");
     try {
         await page.waitForTimeout(1000);
