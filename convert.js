@@ -4,11 +4,8 @@ const fs = require('fs');
 (async () => {
   const productLink = process.argv[2];
   if (!productLink) {
-    throw new Error('❌ Product link missing');
+    throw new Error('Product link missing');
   }
-
-  // Load saved login session from GitHub Secret
-  const storage = JSON.parse(process.env.WISHLINK_STORAGE);
 
   const browser = await chromium.launch({
     headless: true,
@@ -16,33 +13,57 @@ const fs = require('fs');
   });
 
   const context = await browser.newContext({
-    storageState: storage,
+    storageState: JSON.parse(process.env.WISHLINK_STORAGE),
   });
 
   const page = await context.newPage();
 
-  console.log('➡️ Opening Wishlink create page');
+  // 1. Open create product page
   await page.goto('https://creator.wishlink.com/new-product', {
     waitUntil: 'networkidle',
     timeout: 60000,
   });
 
-  console.log('➡️ Filling product link');
-  const input = page.locator('input[placeholder*="Paste"]');
+  // 2. Paste product link
+  const input = page.locator('input[type="text"]');
   await input.waitFor({ timeout: 30000 });
   await input.fill(productLink);
 
-  console.log('➡️ Creating Wishlink');
-  await page.locator('button:has-text("Create Wishlink")').click();
+  // 3. Click Create Wishlink
+  const createBtn = page.locator('button:has-text("Create Wishlink")');
+  await createBtn.waitFor({ timeout: 30000 });
+  await createBtn.click();
 
-  console.log('⏳ Waiting for Wishlink URL');
-  const wishlink = page.locator('input[value^="https://"]');
-  await wishlink.waitFor({ timeout: 60000 });
+  // 4. Wait for success modal
+  await page.waitForSelector('button:has-text("Share Wishlink")', {
+    timeout: 60000,
+  });
 
-  const converted = await wishlink.inputValue();
-  console.log('✅ CONVERTED LINK:', converted);
+  // 5. Click Share Wishlink (copies to clipboard)
+  await page.click('button:has-text("Share Wishlink")');
 
-  fs.writeFileSync('wishlink.json', JSON.stringify({ original: productLink, wishlink: converted }, null, 2));
+  // 6. Read clipboard
+  const wishlink = await page.evaluate(() => navigator.clipboard.readText());
+
+  if (!wishlink || !wishlink.startsWith('http')) {
+    throw new Error('Failed to read Wishlink from clipboard');
+  }
+
+  // 7. Save output
+  fs.writeFileSync(
+    'wishlink.json',
+    JSON.stringify(
+      {
+        input: productLink,
+        output: wishlink,
+        createdAt: new Date().toISOString(),
+      },
+      null,
+      2
+    )
+  );
+
+  console.log('✅ Wishlink created:', wishlink);
 
   await browser.close();
 })();
