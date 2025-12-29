@@ -1,0 +1,31 @@
+name: Link Worker
+
+on:
+  workflow_dispatch:
+    inputs:
+      product_link:
+        description: "Product link to process"
+        required: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install playwright
+          npx playwright install chromium
+
+      - name: Run worker
+        run: |
+          node convert.js "${{ github.event.inputs.product_link }}"
