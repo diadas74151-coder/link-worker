@@ -1,73 +1,74 @@
-const { chromium } = require('playwright');
+const { chromium, devices } = require('playwright'); // Import devices
 const readline = require('readline');
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve));
 
 (async () => {
-  console.log("🚀 Launching Browser...");
+  console.log("🚀 Launching Browser (Mobile Mode: iPhone 12)...");
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
+  
+  // 👇 TRICK: Emulate a real iPhone to bypass security
+  const context = await browser.newContext({
+    ...devices['iPhone 12'], 
+    geolocation: { latitude: 20.5937, longitude: 78.9629 }, // India Coords
+    permissions: ['geolocation'],
+    locale: 'en-IN',
+    timezoneId: 'Asia/Kolkata'
+  });
+  
   const page = await context.newPage();
 
   try {
     // 1. NAVIGATE
-    console.log("🌍 Navigating to Wishlink...");
+    console.log("🌍 Navigating to Wishlink Mobile...");
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
-    // 2. OPEN DROPDOWN
-    console.log("🔍 Force-Clicking Country Box...");
+    // 2. FORCE SELECT INDIA
+    console.log("🔍 Locating Country Dropdown...");
     const countryBox = page.locator('.PhoneInputCountry').first();
     await countryBox.waitFor({ state: 'visible', timeout: 30000 });
-    await countryBox.click({ force: true });
+    await countryBox.tap(); // Mobile uses "tap"
     
-    console.log("📂 Dropdown Clicked. Waiting for list...");
-    await page.waitForTimeout(1000);
-
-    // 3. SELECT INDIA
     console.log("🇮🇳 Selecting 'India'...");
-    // Try to click "India" text
-    const indiaOption = page.locator('div, li, span').filter({ hasText: 'India' }).last();
-    if (await indiaOption.isVisible()) {
-        await indiaOption.scrollIntoViewIfNeeded();
-        await indiaOption.click({ force: true });
-    } else {
-        // Fallback to typing
-        await page.keyboard.type('India');
-        await page.waitForTimeout(800);
-        await page.keyboard.press('Enter');
-    }
     await page.waitForTimeout(1000);
-
-    // 4. ENTER PHONE NUMBER (Hardcoded & Slow Typing)
-    console.log("📱 Entering Phone Number: 9547131252");
+    // Type India on virtual keyboard
+    await page.keyboard.type('India');
+    await page.waitForTimeout(1000);
+    await page.keyboard.press('Enter');
     
+    // 3. VERIFY +91 (Strict Check)
+    await page.waitForTimeout(1000);
     const phoneInput = page.locator('input[type="tel"]').first();
-    await phoneInput.click({ force: true });
-    
-    // 👇 CRITICAL FIX: Type slowly so we don't break the +91 format
-    await page.waitForTimeout(500);
-    await phoneInput.pressSequentially('9547131252', { delay: 100 });
+    const val = await phoneInput.inputValue();
+    console.log(`ℹ️ Country Code Verified: ${val}`); // Should show +91
+
+    // 4. ENTER NUMBER (9547131252)
+    console.log("📱 Entering Number: 9547131252");
+    await phoneInput.tap();
+    // Type slowly like a human thumb
+    await phoneInput.pressSequentially('9547131252', { delay: 200 });
+    await page.waitForTimeout(2000); // Wait for validation
 
     // 5. GET OTP
-    console.log("👆 Clicking 'Get OTP'...");
+    console.log("👆 Tapping 'Get OTP'...");
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
-    await otpBtn.click({ force: true });
+    await otpBtn.tap();
 
     // 6. ENTER OTP
-    console.log("\n📩 OTP Sent! Check your phone now.");
+    console.log("\n📩 OTP Sent! (Hopefully)");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
     
     const otpInput = page.locator('input[type="number"], input[autocomplete="one-time-code"]').first();
     await otpInput.waitFor({ state: 'visible' });
-    await otpInput.fill(otp, { force: true });
+    await otpInput.fill(otp);
 
     // 7. FINISH
     console.log("⏳ Verifying...");
     try {
         await page.waitForTimeout(1000);
         const verifyBtn = page.locator('button').filter({ hasText: /verify|submit/i }).first();
-        if (await verifyBtn.isVisible()) await verifyBtn.click();
+        if (await verifyBtn.isVisible()) await verifyBtn.tap();
     } catch (e) {}
 
     console.log("⏳ Waiting for Dashboard...");
@@ -82,7 +83,6 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
 
   } catch (error) {
     console.error("❌ Error:", error.message);
-    await page.screenshot({ path: 'debug_error.png' });
   } finally {
     await browser.close();
     rl.close();
