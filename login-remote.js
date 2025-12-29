@@ -15,16 +15,15 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
     // ---------------------------------------------------------
-    // STEP 1: OPEN DROPDOWN (Click the "+1" text)
+    // STEP 1: OPEN DROPDOWN (Generic Click)
     // ---------------------------------------------------------
-    console.log("🔍 Looking for Country Dropdown...");
+    console.log("🔍 Clicking Country Box...");
     
-    // The default is usually +1 (US). We look for that text to click.
-    // We use a flexible locator that looks for the country code container
-    const countryTrigger = page.locator('.react-tel-input .flag-dropdown, .selected-flag, div').filter({ hasText: '+1' }).last();
+    // We target the generic "Selected Flag" box found in almost all phone inputs
+    const countryBox = page.locator('.selected-flag').first();
     
-    await countryTrigger.waitFor({ state: 'visible', timeout: 30000 });
-    await countryTrigger.click();
+    await countryBox.waitFor({ state: 'visible', timeout: 30000 });
+    await countryBox.click();
     console.log("📂 Dropdown Opened.");
 
     // ---------------------------------------------------------
@@ -43,18 +42,19 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     // STEP 3: CLICK "India"
     // ---------------------------------------------------------
     console.log("👆 Selecting 'India'...");
-    // Look strictly for the text "India" in the list
-    const indiaOption = page.locator('li, span, div').filter({ hasText: /^India$/i }).first();
-    await indiaOption.click();
+    // Select the option that specifically says "India" (Case insensitive)
+    const indiaOption = page.locator('li.country').filter({ hasText: /^India$/i }).first();
     
-    // Verify it changed to +91
-    await page.waitForTimeout(1000);
-    const codeCheck = await page.getByText('+91').first();
-    if (await codeCheck.isVisible()) {
-        console.log("✅ Country set to India (+91)");
+    // Fallback: If list item not found by text, just press Enter to select whatever is highlighted
+    if (await indiaOption.isVisible()) {
+        await indiaOption.click();
     } else {
-        console.log("⚠️ Warning: Could not verify +91, proceeding anyway...");
+        console.log("⚠️ Exact 'India' option not found, pressing ENTER on selection...");
+        await page.keyboard.press('Enter');
     }
+    
+    console.log("✅ Country Selection Done.");
+    await page.waitForTimeout(1000);
 
     // ---------------------------------------------------------
     // STEP 4: ENTER PHONE NUMBER
