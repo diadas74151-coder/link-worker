@@ -1,51 +1,48 @@
-const { chromium } = require('playwright-chromium');
+const { chromium } = require('playwright');
 const fs = require('fs');
 
 (async () => {
-  const inputLink = process.argv[2];
-
-  if (!inputLink) {
-    console.error("❌ No product link provided");
-    process.exit(1);
+  const productLink = process.argv[2];
+  if (!productLink) {
+    throw new Error('❌ Product link missing');
   }
 
-  // Restore wishlink.json from GitHub Secret
-  fs.writeFileSync(
-    'wishlink.json',
-    process.env.WISHLINK_STORAGE
-  );
+  // Load saved login session from GitHub Secret
+  const storage = JSON.parse(process.env.WISHLINK_STORAGE);
 
   const browser = await chromium.launch({
-    headless: true
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   });
 
   const context = await browser.newContext({
-    storageState: 'wishlink.json'
+    storageState: storage,
   });
 
   const page = await context.newPage();
 
-  // Open Wishlink dashboard
-  await page.goto('https://creator.wishlink.com/home', {
-    waitUntil: 'domcontentloaded'
+  console.log('➡️ Opening Wishlink create page');
+  await page.goto('https://creator.wishlink.com/new-product', {
+    waitUntil: 'networkidle',
+    timeout: 60000,
   });
 
-  // Paste product link
-  await page.fill('input[type="url"], input[type="text"]', inputLink);
+  console.log('➡️ Filling product link');
+  const input = page.locator('input[placeholder*="Paste"]');
+  await input.waitFor({ timeout: 30000 });
+  await input.fill(productLink);
 
-  // Click Create / Convert
-  await page.click('button:has-text("Create")');
+  console.log('➡️ Creating Wishlink');
+  await page.locator('button:has-text("Create Wishlink")').click();
 
-  // Wait for generated link
-  await page.waitForSelector('input[readonly]', { timeout: 20000 });
+  console.log('⏳ Waiting for Wishlink URL');
+  const wishlink = page.locator('input[value^="https://"]');
+  await wishlink.waitFor({ timeout: 60000 });
 
-  const convertedLink = await page.$eval(
-    'input[readonly]',
-    el => el.value
-  );
+  const converted = await wishlink.inputValue();
+  console.log('✅ CONVERTED LINK:', converted);
 
-  console.log("✅ Converted Wishlink:");
-  console.log(convertedLink);
+  fs.writeFileSync('wishlink.json', JSON.stringify({ original: productLink, wishlink: converted }, null, 2));
 
   await browser.close();
 })();
