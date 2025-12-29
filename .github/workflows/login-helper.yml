@@ -1,103 +1,42 @@
-const { chromium } = require('playwright');
-const readline = require('readline');
+name: Login Helper
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
+on: [workflow_dispatch]
 
-const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve));
+jobs:
+  interactive-login:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-(async () => {
-  console.log("\n🚀 Launching Browser on GitHub Server...");
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext();
-  const page = await context.newPage();
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
 
-  try {
-    // 1️⃣ Go directly to the Login/Welcome page
-    console.log("🌍 Navigating to Wishlink Welcome Page...");
-    await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
+      - name: Install Dependencies
+        run: |
+          npm install --ignore-scripts
+          chmod +x ./node_modules/.bin/playwright
+          ./node_modules/.bin/playwright install chromium
 
-    // 2️⃣ Handle Country Selection (Force India)
-    console.log("🇮🇳 Checking Country Code...");
-    
-    // Check if +91 is not selected
-    const countryText = await page.textContent('body'); // simplistic check, real check below
-    
-    // Try to click the country dropdown (it usually has the flag or +XX)
-    // We look for the dropdown trigger next to the phone input
-    const countryDropdown = page.locator('.flag-dropdown, [class*="selected-flag"], div[role="button"]:has-text("+")').first();
-    
-    if (await countryDropdown.isVisible()) {
-        await countryDropdown.click();
-        console.log("👉 Opened Country List. Selecting India...");
-        
-        // Click "India" from the list
-        const indiaOption = page.locator('li, div').filter({ hasText: /^India$/i }).first();
-        // Fallback: search for +91 text
-        const indiaCode = page.locator('li, div').filter({ hasText: '+91' }).first();
-        
-        if (await indiaOption.isVisible()) {
-            await indiaOption.click();
-        } else if (await indiaCode.isVisible()) {
-            await indiaCode.click();
-        }
-        console.log("✅ Country set to India (+91)");
-    }
-
-    // 3️⃣ Enter Phone Number
-    const phoneInput = page.getByPlaceholder(/enter phone number/i);
-    await phoneInput.waitFor({ state: 'visible', timeout: 30000 });
-    
-    const phone = await askQuestion("\n📱 Enter your Mobile Number (10 digits only): ");
-    await phoneInput.fill(phone);
-
-    // 4️⃣ Click Get OTP
-    console.log("👆 Clicking Get OTP...");
-    const otpBtn = page.getByRole('button', { name: /get otp/i });
-    await otpBtn.click();
-
-    // 5️⃣ Enter OTP
-    console.log("\n📩 OTP Sent! Check your phone.");
-    const otp = await askQuestion("🔑 Enter the 6-digit OTP: ");
-    
-    // Wait for OTP input boxes (usually 6 boxes or 1 main box)
-    // We try to find the input and type
-    const otpInput = page.locator('input[autocomplete="one-time-code"], input[type="number"]').first();
-    await otpInput.waitFor({ state: 'visible', timeout: 30000 });
-    await otpInput.fill(otp);
-
-    // 6️⃣ Auto-Verify or Click Verify
-    console.log("⏳ Verifying...");
-    // Sometimes it auto-submits, sometimes we need to click
-    try {
-        const verifyBtn = page.getByRole('button', { name: /verify/i });
-        if (await verifyBtn.isVisible()) {
-            await verifyBtn.click();
-        }
-    } catch (e) {}
-
-    // 7️⃣ Wait for Dashboard
-    console.log("⏳ Waiting for Dashboard...");
-    await page.waitForTimeout(5000); 
-    
-    // 8️⃣ Capture Session
-    console.log("✅ Login Successful! Capturing Session...");
-    const storageState = await context.storageState();
-    
-    console.log("\n👇 COPY THE JSON BELOW THIS LINE 👇\n");
-    console.log(JSON.stringify(storageState));
-    console.log("\n👆 COPY THE JSON ABOVE THIS LINE 👆\n");
-
-  } catch (error) {
-    console.error("❌ Error:", error.message);
-    // Debug: Take screenshot on error to see what happened
-    await page.screenshot({ path: 'debug_error.png' });
-    console.log("📸 Error screenshot saved (you can't see it, but I took it).");
-  } finally {
-    await browser.close();
-    rl.close();
-    process.exit(0);
-  }
-})();
+      - name: Start Web Terminal (Cloudflare)
+        run: |
+          wget -q -O ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64
+          chmod +x ttyd
+          ./ttyd -W -p 8080 bash &
+          
+          wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared-linux-amd64.deb
+          cloudflared tunnel --url http://localhost:8080 > tunnel.log 2>&1 &
+          
+          echo "Waiting for connection..."
+          sleep 10
+          
+          echo "--------------------------------------------------"
+          echo "👇 CLICK THIS LINK TO OPEN TERMINAL 👇"
+          grep -o 'https://.*\.trycloudflare.com' tunnel.log
+          echo "👆 CLICK THIS LINK TO OPEN TERMINAL 👆"
+          echo "--------------------------------------------------"
+          
+          sleep 3600
