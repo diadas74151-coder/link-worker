@@ -23,7 +23,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm install
-          npx playwright install --with-deps
+          npx --yes playwright install --with-deps
 
       - name: Convert link
         env:
