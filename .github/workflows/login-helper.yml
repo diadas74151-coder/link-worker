@@ -15,8 +15,9 @@ jobs:
           node-version: 18
 
       - name: Install Dependencies
+        # 👇 FIXED: We use --ignore-scripts to stop the "Permission denied" error
         run: |
-          npm install
+          npm install --ignore-scripts
           npx playwright install chromium
 
       - name: Start Web Terminal (Cloudflare)
