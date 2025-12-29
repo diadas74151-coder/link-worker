@@ -15,9 +15,9 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     console.log("🌍 Navigating to Wishlink...");
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
-    // 2. OPEN DROPDOWN (Force Click)
+    // 2. OPEN DROPDOWN
     console.log("🔍 Force-Clicking Country Box...");
-    // Using the class we saw in your logs
+    // Use the class specific to the phone library
     const countryBox = page.locator('.PhoneInputCountry').first();
     await countryBox.waitFor({ state: 'visible', timeout: 30000 });
     await countryBox.click({ force: true });
@@ -25,45 +25,67 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     console.log("📂 Dropdown Clicked. Waiting for list...");
     await page.waitForTimeout(1000);
 
-    // 3. SELECT INDIA (Click by Name)
-    console.log("🇮🇳 Finding 'India' in the list...");
+    // 3. SELECT INDIA (Robust Method)
+    console.log("🇮🇳 Selecting 'India'...");
     
-    // Instead of typing shortcuts, we look for the text "India" and FORCE click it
-    // This solves the +98 (Iran) issue
-    const indiaOption = page.locator('div, li, span').filter({ hasText: /^India$/i }).last();
+    // Method A: Try to click the specific text "India"
+    // We use a looser match (contains text) to be safe
+    const indiaOption = page.locator('div, li, span').filter({ hasText: 'India' }).last();
     
     if (await indiaOption.isVisible()) {
+        console.log("👉 Click by Text: India");
         await indiaOption.scrollIntoViewIfNeeded();
         await indiaOption.click({ force: true });
-        console.log("✅ Clicked 'India' option.");
     } else {
-        // Fallback: If text click fails, use the keyboard but type "Ind" quickly
-        console.log("⚠️ Text not found, typing 'Ind'...");
-        await page.keyboard.type('Ind');
-        await page.waitForTimeout(500);
+        // Method B: Type specific sequence
+        console.log("⚠️ Text hidden, using Keyboard...");
+        // Type "India" fully to avoid "Indonesia" match
+        await page.keyboard.type('India');
+        await page.waitForTimeout(800);
         await page.keyboard.press('Enter');
     }
     
     await page.waitForTimeout(1000);
 
-    // 4. ENTER PHONE NUMBER (The Fix for "Subtree Intercepts")
-    console.log("📱 Locating Phone Input...");
-    const phoneInput = page.locator('input[type="tel"]').first();
+    // 4. VERIFY COUNTRY CODE (CRITICAL STEP)
+    console.log("👀 Verifying Country Code...");
     
-    // 👇 CRITICAL FIX: We force the click to punch through any overlays
+    // Check the value inside the input box
+    const phoneInput = page.locator('input[type="tel"]').first();
+    const inputValue = await phoneInput.inputValue();
+    
+    console.log(`ℹ️ Current Input Value: "${inputValue}"`);
+    
+    if (inputValue.includes('+91') || inputValue === '') {
+        console.log("✅ Country seems correct (India +91).");
+    } else {
+        console.log(`❌ WARNING: Country Code looks wrong! Found: ${inputValue}`);
+        console.log("🔄 Retrying India selection via Native Select...");
+        
+        // Emergency Fallback: Force the hidden select element
+        await page.evaluate(() => {
+            const select = document.querySelector('select.PhoneInputCountrySelect');
+            if (select) {
+                select.value = 'IN';
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        await page.waitForTimeout(1000);
+    }
+
+    // 5. ENTER PHONE NUMBER
+    console.log("📱 Entering Phone Number...");
     await phoneInput.click({ force: true });
     
     const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
-    
-    // 👇 CRITICAL FIX: We force the fill as well
     await phoneInput.fill(phone, { force: true });
 
-    // 5. GET OTP
+    // 6. GET OTP
     console.log("👆 Clicking 'Get OTP'...");
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
     await otpBtn.click({ force: true });
 
-    // 6. ENTER OTP
+    // 7. ENTER OTP
     console.log("\n📩 OTP Sent! Check your phone.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
     
@@ -71,7 +93,7 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await otpInput.waitFor({ state: 'visible' });
     await otpInput.fill(otp, { force: true });
 
-    // 7. FINISH
+    // 8. FINISH
     console.log("⏳ Verifying...");
     try {
         await page.waitForTimeout(1000);
