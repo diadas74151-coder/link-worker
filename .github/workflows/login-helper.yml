@@ -16,9 +16,11 @@ jobs:
           node-version: 18
 
       - name: Install Dependencies
+        # 👇 THIS BLOCK FIXES THE "PERMISSION DENIED" ERROR
         run: |
           npm install --ignore-scripts
-          npx playwright install chromium
+          chmod +x ./node_modules/.bin/playwright
+          ./node_modules/.bin/playwright install chromium
 
       - name: Start Web Terminal (Cloudflare)
         run: |
