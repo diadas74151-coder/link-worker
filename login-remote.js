@@ -1,67 +1,87 @@
 const { chromium } = require('playwright');
 const readline = require('readline');
 
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout
-});
-
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve));
 
 (async () => {
-  console.log("\n🚀 Launching Browser on GitHub Server...");
-  
-  // We launch headless because the server has no screen
+  console.log("🚀 Launching Browser...");
+  // Launch headless because we are on a server
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
 
   try {
+    // 1. Navigate to Welcome Page
     console.log("🌍 Navigating to Wishlink...");
-    await page.goto('https://creator.wishlink.com', { waitUntil: 'networkidle' });
+    await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
-    // 1️⃣ Enter Mobile Number
-    console.log("👉 Page Loaded.");
-    // Wait for the input to appear
-    const phoneInput = page.locator('input[type="tel"], input[placeholder*="Mobile"], input[placeholder*="Phone"]').first();
-    await phoneInput.waitFor({ state: 'visible', timeout: 15000 });
+    // 2. Wait for Phone Input to be ready
+    console.log("⏳ Waiting for page load...");
+    const phoneInput = page.locator('input[placeholder*="Phone"], input[type="tel"]');
+    await phoneInput.waitFor({ state: 'visible', timeout: 60000 });
+
+    // 3. Ensure India (+91) is selected
+    // We try to find the dropdown toggle
+    const countryDropdown = page.locator('.flag-dropdown, .react-tel-input .selected-flag');
     
-    const phone = await askQuestion("\n📱 Enter your Mobile Number (e.g. +919999999999): ");
+    if (await countryDropdown.isVisible()) {
+        console.log("🇮🇳 Checking Country Code...");
+        await countryDropdown.click(); // Open dropdown
+        
+        // Find India in the list
+        const indiaOption = page.locator('li.country').filter({ hasText: 'India' });
+        if (await indiaOption.isVisible()) {
+            await indiaOption.click();
+            console.log("✅ Selected India (+91)");
+        } else {
+            // If we can't click it, it might already be selected or hidden, just try typing
+            console.log("⚠️ Could not click India option, proceeding with default...");
+        }
+        // Click body to close dropdown if open
+        await page.locator('body').click();
+    }
+
+    // 4. Enter Phone Number
+    const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
     await phoneInput.fill(phone);
 
-    // 2️⃣ Click Continue
-    console.log("👆 Clicking Continue...");
-    const continueBtn = page.locator('button', { hasText: /continue|get otp|proceed/i }).first();
-    await continueBtn.click();
+    // 5. Click "Get OTP"
+    console.log("👆 Clicking 'Get OTP'...");
+    const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
+    await otpBtn.click();
 
-    // 3️⃣ Enter OTP
+    // 6. Enter OTP
     console.log("\n📩 OTP Sent! Check your phone.");
-    const otp = await askQuestion("🔑 Enter the 6-digit OTP: ");
+    const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
     
-    // Find OTP input (generic selector that works on most sites)
-    const otpInput = page.locator('input[autocomplete="one-time-code"], input[aria-label*="OTP"], input[type="number"]').first();
+    // Find OTP input (Wait for it to appear)
+    const otpInput = page.locator('input[autocomplete="one-time-code"], input[type="number"]').first();
+    await otpInput.waitFor({ state: 'visible', timeout: 30000 });
     await otpInput.fill(otp);
 
-    // Click Verify if needed (sometimes it auto-submits)
+    // 7. Verify (if button exists)
+    console.log("⏳ Verifying...");
     try {
-        const verifyBtn = page.locator('button', { hasText: /verify|login|submit/i }).first();
+        // Wait a moment for auto-submit
+        await page.waitForTimeout(2000);
+        const verifyBtn = page.locator('button').filter({ hasText: /verify|submit/i }).first();
         if (await verifyBtn.isVisible()) {
             await verifyBtn.click();
         }
     } catch (e) {}
 
+    // 8. Wait for Login Success
     console.log("⏳ Waiting for Dashboard...");
-    // Wait until we are logged in (URL changes to /new-product or dashboard)
-    await page.waitForTimeout(5000); 
+    // Wait for URL to change or dashboard element
+    await page.waitForTimeout(5000);
     
     console.log("✅ Login Successful! Capturing Session...");
-
-    // 4️⃣ Output the JSON
     const storageState = await context.storageState();
     
-    console.log("\n👇 COPY THE JSON BELOW THIS LINE 👇\n");
+    console.log("\n👇 COPY THIS JSON 👇\n");
     console.log(JSON.stringify(storageState));
-    console.log("\n👆 COPY THE JSON ABOVE THIS LINE 👆\n");
+    console.log("\n👆 COPY THIS JSON 👆\n");
 
   } catch (error) {
     console.error("❌ Error:", error.message);
