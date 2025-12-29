@@ -15,46 +15,53 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     console.log("🌍 Navigating to Wishlink...");
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
-    // 2. FORCE CLICK DROPDOWN
-    console.log("🔍 Locating Country Dropdown...");
+    // 2. OPEN DROPDOWN (Force Click)
+    console.log("🔍 Force-Clicking Country Box...");
+    // Using the class we saw in your logs
+    const countryBox = page.locator('.PhoneInputCountry').first();
+    await countryBox.waitFor({ state: 'visible', timeout: 30000 });
+    await countryBox.click({ force: true });
     
-    // We use the specific class found in your error logs: .PhoneInputCountry
-    const countryDropdown = page.locator('.PhoneInputCountry').first();
-    await countryDropdown.waitFor({ state: 'visible', timeout: 30000 });
-
-    console.log("👉 Force-Clicking Dropdown...");
-    // FORCE: TRUE is the fix for "subtree intercepts pointer events"
-    await countryDropdown.click({ force: true });
-    
-    console.log("📂 Dropdown Clicked.");
-
-    // 3. SELECT INDIA (Keyboard Trick)
-    console.log("⌨️  Typing 'I' twice...");
-    await page.waitForTimeout(1000); // Wait for list to open
-    
-    // Press I, wait, Press I
-    await page.keyboard.press('I');
-    await page.waitForTimeout(800); 
-    await page.keyboard.press('I');
-    await page.waitForTimeout(800);
-
-    // Press ENTER to select India
-    console.log("✅ Pressing ENTER to confirm...");
-    await page.keyboard.press('Enter');
+    console.log("📂 Dropdown Clicked. Waiting for list...");
     await page.waitForTimeout(1000);
 
-    // 4. ENTER PHONE NUMBER
+    // 3. SELECT INDIA (Click by Name)
+    console.log("🇮🇳 Finding 'India' in the list...");
+    
+    // Instead of typing shortcuts, we look for the text "India" and FORCE click it
+    // This solves the +98 (Iran) issue
+    const indiaOption = page.locator('div, li, span').filter({ hasText: /^India$/i }).last();
+    
+    if (await indiaOption.isVisible()) {
+        await indiaOption.scrollIntoViewIfNeeded();
+        await indiaOption.click({ force: true });
+        console.log("✅ Clicked 'India' option.");
+    } else {
+        // Fallback: If text click fails, use the keyboard but type "Ind" quickly
+        console.log("⚠️ Text not found, typing 'Ind'...");
+        await page.keyboard.type('Ind');
+        await page.waitForTimeout(500);
+        await page.keyboard.press('Enter');
+    }
+    
+    await page.waitForTimeout(1000);
+
+    // 4. ENTER PHONE NUMBER (The Fix for "Subtree Intercepts")
     console.log("📱 Locating Phone Input...");
     const phoneInput = page.locator('input[type="tel"]').first();
-    await phoneInput.click();
+    
+    // 👇 CRITICAL FIX: We force the click to punch through any overlays
+    await phoneInput.click({ force: true });
     
     const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
-    await phoneInput.fill(phone);
+    
+    // 👇 CRITICAL FIX: We force the fill as well
+    await phoneInput.fill(phone, { force: true });
 
     // 5. GET OTP
     console.log("👆 Clicking 'Get OTP'...");
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
-    await otpBtn.click();
+    await otpBtn.click({ force: true });
 
     // 6. ENTER OTP
     console.log("\n📩 OTP Sent! Check your phone.");
@@ -62,7 +69,7 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     
     const otpInput = page.locator('input[type="number"], input[autocomplete="one-time-code"]').first();
     await otpInput.waitFor({ state: 'visible' });
-    await otpInput.fill(otp);
+    await otpInput.fill(otp, { force: true });
 
     // 7. FINISH
     console.log("⏳ Verifying...");
