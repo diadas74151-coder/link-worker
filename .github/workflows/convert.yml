@@ -12,23 +12,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
-          cache: 'npm'
 
       - name: Install dependencies
         run: |
           npm install
-          npm install playwright # <--- ADDED: Explicitly installs the library
-          npx playwright install chromium --with-deps
+          sudo apt-get update
+          sudo apt-get install -y \
+            libnss3 \
+            libatk1.0-0 \
+            libatk-bridge2.0-0 \
+            libcups2 \
+            libxkbcommon0 \
+            libxcomposite1 \
+            libxrandr2 \
+            libxdamage1 \
+            libxfixes3 \
+            libgbm1 \
+            libasound2
 
       - name: Convert link
         env:
           WISHLINK_STORAGE: ${{ secrets.WISHLINK_STORAGE }}
         run: |
-          node convert.js "${{ inputs.product_link }}"
+          node convert.js "${{ github.event.inputs.product_link }}"
