@@ -15,32 +15,49 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
     // ---------------------------------------------------------
-    // STEP 1: SELECT INDIA (Using "I" + "I" Trick)
+    // STEP 1: OPEN DROPDOWN (Click the "+1" text)
     // ---------------------------------------------------------
-    console.log("🇮🇳 Selecting Country: India...");
+    console.log("🔍 Looking for Country Dropdown...");
     
-    // 1. Click the flag dropdown to open the list
-    const flagDropdown = page.locator('.selected-flag');
-    await flagDropdown.waitFor({ state: 'visible' });
-    await flagDropdown.click();
+    // The default is usually +1 (US). We look for that text to click.
+    // We use a flexible locator that looks for the country code container
+    const countryTrigger = page.locator('.react-tel-input .flag-dropdown, .selected-flag, div').filter({ hasText: '+1' }).last();
     
-    // 2. Type "I" twice as per your instruction
-    console.log("⌨️  Typing 'I' twice...");
-    await page.keyboard.press('I');
-    await page.waitForTimeout(500); // Small pause
-    await page.keyboard.press('I');
-    await page.waitForTimeout(500); // Wait for scroll/highlight
+    await countryTrigger.waitFor({ state: 'visible', timeout: 30000 });
+    await countryTrigger.click();
+    console.log("📂 Dropdown Opened.");
 
-    // 3. Click the "India" option to confirm
-    // We look for "India" or "INDIA" specifically
-    const indiaOption = page.locator('.country-list .country').filter({ hasText: /India/i }).first();
+    // ---------------------------------------------------------
+    // STEP 2: SELECT INDIA (Type "I" twice)
+    // ---------------------------------------------------------
+    console.log("⌨️  Typing 'I' twice...");
+    await page.waitForTimeout(500); // Wait for animation
+    
+    // Type I -> Wait -> I
+    await page.keyboard.press('I');
+    await page.waitForTimeout(800); 
+    await page.keyboard.press('I');
+    await page.waitForTimeout(800);
+
+    // ---------------------------------------------------------
+    // STEP 3: CLICK "India"
+    // ---------------------------------------------------------
+    console.log("👆 Selecting 'India'...");
+    // Look strictly for the text "India" in the list
+    const indiaOption = page.locator('li, span, div').filter({ hasText: /^India$/i }).first();
     await indiaOption.click();
     
-    console.log("✅ Country set to India (+91)");
-    await page.waitForTimeout(1000); 
+    // Verify it changed to +91
+    await page.waitForTimeout(1000);
+    const codeCheck = await page.getByText('+91').first();
+    if (await codeCheck.isVisible()) {
+        console.log("✅ Country set to India (+91)");
+    } else {
+        console.log("⚠️ Warning: Could not verify +91, proceeding anyway...");
+    }
 
     // ---------------------------------------------------------
-    // STEP 2: ENTER PHONE NUMBER
+    // STEP 4: ENTER PHONE NUMBER
     // ---------------------------------------------------------
     const phoneInput = page.getByPlaceholder(/enter phone number/i);
     await phoneInput.click();
@@ -49,14 +66,14 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await phoneInput.fill(phone);
 
     // ---------------------------------------------------------
-    // STEP 3: GET OTP
+    // STEP 5: GET OTP
     // ---------------------------------------------------------
     console.log("👆 Clicking 'Get OTP'...");
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
     await otpBtn.click();
 
     // ---------------------------------------------------------
-    // STEP 4: ENTER OTP
+    // STEP 6: ENTER OTP
     // ---------------------------------------------------------
     console.log("\n📩 OTP Sent! Please check your phone.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
@@ -66,7 +83,7 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await otpInput.fill(otp);
 
     // ---------------------------------------------------------
-    // STEP 5: VERIFY & SAVE
+    // STEP 7: VERIFY & SAVE
     // ---------------------------------------------------------
     console.log("⏳ Verifying...");
     try {
@@ -89,7 +106,7 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
 
   } catch (error) {
     console.error("❌ Error:", error.message);
-    await page.screenshot({ path: 'error_debug.png' });
+    await page.screenshot({ path: 'debug_error.png' });
   } finally {
     await browser.close();
     rl.close();
