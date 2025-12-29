@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       product_link:
-        description: "Product link to convert"
+        description: "Product link to process"
         required: true
 
 jobs:
@@ -12,14 +12,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Run converter
         run: |
           node convert.js "${{ github.event.inputs.product_link }}"
+          echo "converted_link=$(cat output.txt)" >> $GITHUB_OUTPUT
+
+      - name: Set output
+        id: result
+        run: echo "done"
