@@ -7,13 +7,29 @@ if (!PRODUCT_LINK) {
   process.exit(1);
 }
 
+// 👇 THIS USER AGENT MUST MATCH THE ONE WE USED LOCALLY
+const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 (async () => {
   const browser = await chromium.launch({
     headless: true,
   });
 
+  // 1. Load Session safely
+  let storageState;
+  try {
+      if (!process.env.WISHLINK_STORAGE) throw new Error("Secret is empty");
+      storageState = JSON.parse(process.env.WISHLINK_STORAGE);
+  } catch(e) {
+      console.error("❌ CRITICAL: WISHLINK_STORAGE secret is missing or invalid.");
+      process.exit(1);
+  }
+
+  // 2. Create Context (Pretending to be your PC)
   const context = await browser.newContext({
-    storageState: JSON.parse(process.env.WISHLINK_STORAGE),
+    storageState: storageState,
+    userAgent: USER_AGENT, // 👈 MATCHING THE SIGNATURE
+    viewport: { width: 1280, height: 720 },
     permissions: ["clipboard-read", "clipboard-write"],
   });
 
@@ -21,49 +37,50 @@ if (!PRODUCT_LINK) {
 
   try {
     console.log("Navigating to Wishlink...");
-    // 1️⃣ Go to Create Page
+    // 3. Go to Create Page
     await page.goto("https://creator.wishlink.com/new-product", {
       waitUntil: "networkidle",
       timeout: 60000
     });
 
-    // 🔴 CHECK: Did we get redirected to Login?
-    if (page.url().includes("/login") || page.url().includes("signin")) {
+    // 🔴 CHECK: Did the session survive?
+    const url = page.url();
+    if (url.includes("/welcome") || url.includes("/login") || url.includes("signin")) {
       throw new Error("❌ SESSION EXPIRED: The bot was redirected to the Login page. Please generate a new WISHLINK_STORAGE json.");
     }
+    
+    console.log("✅ Session is Alive! Converting link...");
 
-    // 2️⃣ Wait for Input (Regex ignores Case Sensitivity)
-    // Matches "PASTE YOUR PRODUCT LINK HERE"
+    // 4. Wait for Input
     const input = page.getByPlaceholder(/paste your product link/i);
     await input.waitFor({ state: "visible", timeout: 30000 });
 
-    // 3️⃣ Fill Link
+    // 5. Fill Link
     console.log("Filling product link...");
     await input.fill(PRODUCT_LINK);
 
-    // 4️⃣ Click Create Button
+    // 6. Click Create Button
     console.log("Clicking Create...");
     await page.getByRole("button", { name: /create wishlink/i }).click();
 
-    // 5️⃣ Wait for Success Modal
+    // 7. Wait for Success Modal
     console.log("Waiting for success...");
-    // Wait for the 'Share Wishlink' button to appear
     const shareButton = page.getByRole("button", { name: /share wishlink/i });
     await shareButton.waitFor({ timeout: 60000 });
 
-    // 6️⃣ Click Share (Triggers Auto-Copy)
+    // 8. Click Share (Triggers Auto-Copy)
     console.log("Clicking Share to trigger copy...");
     await shareButton.click();
 
-    // 7️⃣ Read Clipboard
+    // 9. Read Clipboard
     await page.waitForTimeout(2000); 
     const wishlink = await page.evaluate(() => navigator.clipboard.readText());
 
     if (!wishlink || !wishlink.startsWith("http")) {
-      throw new Error(`❌ Clipboard was empty. Got: "${wishlink}"`);
+      throw new Error(`❌ Clipboard was empty or invalid. Got: "${wishlink}"`);
     }
 
-    // 8️⃣ Save Output
+    // 10. Save Output
     fs.writeFileSync(
       "wishlink.json",
       JSON.stringify(
