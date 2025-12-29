@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       product_link:
-        description: "Paste product link to convert"
+        description: "Paste product link"
         required: true
 
 jobs:
@@ -12,31 +12,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
       - name: Install dependencies
-        run: |
-          npm install playwright-chromium
-          sudo apt-get update
-          sudo apt-get install -y \
-            libnss3 \
-            libatk1.0-0 \
-            libatk-bridge2.0-0 \
-            libcups2 \
-            libxkbcommon0 \
-            libxcomposite1 \
-            libxrandr2 \
-            libxdamage1 \
-            libxfixes3 \
-            libgbm1 \
-            libasound2t64
+        run: npm install
 
       - name: Convert link
         env:
           WISHLINK_STORAGE: ${{ secrets.WISHLINK_STORAGE }}
         run: |
           node convert.js "${{ github.event.inputs.product_link }}"
+
+      - name: Upload result
+        uses: actions/upload-artifact@v4
+        with:
+          name: wishlink
+          path: wishlink.json
