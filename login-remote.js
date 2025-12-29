@@ -11,69 +11,61 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
   const page = await context.newPage();
 
   try {
-    console.log("🌍 Navigating to Wishlink...");
+    // ---------------------------------------------------------
+    // 1. NAVIGATE & WAIT FOR INPUT
+    // ---------------------------------------------------------
+    console.log("🌍 Navigating to Wishlink Welcome Page...");
     await page.goto('https://creator.wishlink.com/welcome', { waitUntil: 'networkidle', timeout: 60000 });
 
-    // ---------------------------------------------------------
-    // STEP 1: OPEN DROPDOWN (Generic Click)
-    // ---------------------------------------------------------
-    console.log("🔍 Clicking Country Box...");
-    
-    // We target the generic "Selected Flag" box found in almost all phone inputs
-    const countryBox = page.locator('.selected-flag').first();
-    
-    await countryBox.waitFor({ state: 'visible', timeout: 30000 });
-    await countryBox.click();
-    console.log("📂 Dropdown Opened.");
+    console.log("⏳ Waiting for phone input...");
+    // Wait for the phone input to appear so we know the page is ready
+    const phoneInput = page.locator('input[type="tel"], input[placeholder*="Phone"]');
+    await phoneInput.waitFor({ state: 'visible', timeout: 60000 });
 
     // ---------------------------------------------------------
-    // STEP 2: SELECT INDIA (Type "I" twice)
+    // 2. YOUR LOGIC: SELECT INDIA
     // ---------------------------------------------------------
-    console.log("⌨️  Typing 'I' twice...");
-    await page.waitForTimeout(500); // Wait for animation
+    console.log("🇮🇳 Checking Country Code...");
+    // Try to click the flag dropdown (Standard selector)
+    const countryDropdown = page.locator('.flag-dropdown, .selected-flag').first();
     
-    // Type I -> Wait -> I
-    await page.keyboard.press('I');
-    await page.waitForTimeout(800); 
-    await page.keyboard.press('I');
-    await page.waitForTimeout(800);
+    // We wait briefly to ensure it's interactive
+    await countryDropdown.waitFor({ state: 'visible', timeout: 5000 }).catch(() => console.log("⚠️ Dropdown might be hidden, trying anyway..."));
 
-    // ---------------------------------------------------------
-    // STEP 3: CLICK "India"
-    // ---------------------------------------------------------
-    console.log("👆 Selecting 'India'...");
-    // Select the option that specifically says "India" (Case insensitive)
-    const indiaOption = page.locator('li.country').filter({ hasText: /^India$/i }).first();
-    
-    // Fallback: If list item not found by text, just press Enter to select whatever is highlighted
-    if (await indiaOption.isVisible()) {
-        await indiaOption.click();
-    } else {
-        console.log("⚠️ Exact 'India' option not found, pressing ENTER on selection...");
-        await page.keyboard.press('Enter');
+    if (await countryDropdown.isVisible()) {
+        await countryDropdown.click(); // Open dropdown
+        console.log("📂 Dropdown clicked. Waiting for list...");
+        
+        // Wait a split second for list to open
+        await page.waitForTimeout(1000);
+        
+        // Click "India"
+        // We look for the list item containing "India"
+        const indiaOption = page.locator('li.country, span.country-name').filter({ hasText: 'India' }).first();
+        
+        if (await indiaOption.isVisible()) {
+            await indiaOption.click();
+            console.log("✅ Selected India (+91)");
+        } else {
+            console.log("⚠️ 'India' option not found in list. It might already be selected.");
+        }
     }
-    
-    console.log("✅ Country Selection Done.");
-    await page.waitForTimeout(1000);
 
     // ---------------------------------------------------------
-    // STEP 4: ENTER PHONE NUMBER
+    // 3. ENTER PHONE NUMBER
     // ---------------------------------------------------------
-    const phoneInput = page.getByPlaceholder(/enter phone number/i);
-    await phoneInput.click();
-    
     const phone = await askQuestion("\n📱 Enter Phone Number (10 digits): ");
     await phoneInput.fill(phone);
 
     // ---------------------------------------------------------
-    // STEP 5: GET OTP
+    // 4. CLICK GET OTP
     // ---------------------------------------------------------
     console.log("👆 Clicking 'Get OTP'...");
     const otpBtn = page.locator('button').filter({ hasText: /get otp|continue/i }).first();
     await otpBtn.click();
 
     // ---------------------------------------------------------
-    // STEP 6: ENTER OTP
+    // 5. ENTER OTP
     // ---------------------------------------------------------
     console.log("\n📩 OTP Sent! Please check your phone.");
     const otp = await askQuestion("🔑 Enter 6-digit OTP: ");
@@ -83,7 +75,7 @@ const askQuestion = (query) => new Promise(resolve => rl.question(query, resolve
     await otpInput.fill(otp);
 
     // ---------------------------------------------------------
-    // STEP 7: VERIFY & SAVE
+    // 6. VERIFY & SAVE
     // ---------------------------------------------------------
     console.log("⏳ Verifying...");
     try {
